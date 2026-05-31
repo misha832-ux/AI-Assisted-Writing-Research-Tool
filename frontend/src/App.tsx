@@ -133,8 +133,7 @@ function App() {
       } catch { return undefined; }
     })();
     if (!userId) {
-      console.error("Missing userId for AI entry");
-      return false;
+      throw new Error("SESSION_LOST");
     }
     try {
       const res = await fetchWithTimeout(
@@ -168,8 +167,7 @@ function App() {
       } catch { return undefined; }
     })();
     if (!userId) {
-      console.error("Missing userId for manual entry");
-      return false;
+      throw new Error("SESSION_LOST");
     }
     try {
       const res = await fetchWithTimeout(
