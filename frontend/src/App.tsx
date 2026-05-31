@@ -487,7 +487,8 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
   const [apiError, setApiError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasAutoSubmitted = useRef(false);
-
+  const isPasteRef = useRef(false);
+ 
   useEffect(() => {
     const interval = setInterval(() => {
       setTimeLeft((t) => {
@@ -497,7 +498,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
+ 
   const handleSubmit = async (currentText: string, isAuto = false) => {
     if (!isAuto && !currentText.trim()) {
       setApiError("Please write your response before finishing.");
@@ -519,7 +520,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
       setSaving(false);
     }
   };
-
+ 
   // Auto-submit when timer expires — use ref to prevent double-firing
   useEffect(() => {
     if (timesUp && !hasAutoSubmitted.current) {
@@ -528,34 +529,43 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timesUp]);
-
+ 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!saving) handleSubmit(text);
   };
-
+ 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const handleBeforeInput = (e: InputEvent) => {
-      if (e.inputType === "insertFromPaste") e.preventDefault();
+      if (e.inputType === "insertFromPaste" || e.inputType === "insertFromPasteAsQuotation") {
+        e.preventDefault();
+        isPasteRef.current = false; // prevented at source, onChange won't fire
+      }
     };
     textarea.addEventListener("beforeinput", handleBeforeInput);
     return () => textarea.removeEventListener("beforeinput", handleBeforeInput);
   }, []);
-
-  const block = (e: React.ClipboardEvent) => e.preventDefault();
-
+ 
+  const block = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    isPasteRef.current = false; // clipboard blocked at event level, no onChange will fire
+  };
+ 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "v") e.preventDefault();
   };
-
+ 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    if (newText.length - text.length > 1) return; // block paste
-    setText(newText);
+    // If this change was triggered by a paste event, block it
+    if (isPasteRef.current) {
+      isPasteRef.current = false;
+      return;
+    }
+    setText(e.target.value);
   };
-
+ 
   return (
     <form onSubmit={submit} className="form-container writing-form">
       <h2 className="form-title">Write without using AI</h2>
@@ -566,7 +576,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
         <b>Reflection Question:</b>&nbsp;To what extent do you think small individual actions can contribute to solving larger global issues?
       </p>
       <p className="warning-text">⚠️ No AI assistance. Copy/paste is disabled.</p>
-
+ 
       {apiError && (
         <div className="api-error-box">
           ⚠️ {apiError}
@@ -582,7 +592,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
           </button>
         </div>
       )}
-
+ 
       <textarea
         ref={textareaRef}
         rows={10}
