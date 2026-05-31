@@ -133,7 +133,8 @@ function App() {
       } catch { return undefined; }
     })();
     if (!userId) {
-      throw new Error("SESSION_LOST");
+      console.error("Missing userId for AI entry");
+      return false;
     }
     try {
       const res = await fetchWithTimeout(
@@ -167,7 +168,8 @@ function App() {
       } catch { return undefined; }
     })();
     if (!userId) {
-      throw new Error("SESSION_LOST");
+      console.error("Missing userId for manual entry");
+      return false;
     }
     try {
       const res = await fetchWithTimeout(
@@ -371,7 +373,21 @@ function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<
 
   const timesUp = timeLeft === 0;
 
-  const handleSubmit = async (currentPrompt: string, currentText: string) => {
+  const handleSubmit = async (currentPrompt: string, currentText: string, isAuto = false) => {
+    if (!isAuto) {
+      if (!currentPrompt.trim() && !currentText.trim()) {
+        setApiError("Please enter your AI prompt and your written response before continuing.");
+        return;
+      }
+      if (!currentPrompt.trim()) {
+        setApiError("Please enter the prompt you gave to AI.");
+        return;
+      }
+      if (!currentText.trim()) {
+        setApiError("Please write your response before continuing.");
+        return;
+      }
+    }
     setSaving(true);
     setApiError(null);
     try {
@@ -393,7 +409,7 @@ function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<
   useEffect(() => {
     if (timesUp && !hasAutoSubmitted.current) {
       hasAutoSubmitted.current = true;
-      handleSubmit(prompt, text);
+      handleSubmit(prompt, text, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timesUp]);
@@ -482,7 +498,11 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = async (currentText: string) => {
+  const handleSubmit = async (currentText: string, isAuto = false) => {
+    if (!isAuto && !currentText.trim()) {
+      setApiError("Please write your response before finishing.");
+      return;
+    }
     setSaving(true);
     setApiError(null);
     try {
@@ -504,7 +524,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
   useEffect(() => {
     if (timesUp && !hasAutoSubmitted.current) {
       hasAutoSubmitted.current = true;
-      handleSubmit(text);
+      handleSubmit(text, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timesUp]);
