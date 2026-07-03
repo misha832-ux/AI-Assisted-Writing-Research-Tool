@@ -1,4 +1,4 @@
-# P2 — AI-Assisted Writing Research Tool
+# AI-Assisted Writing Research Tool
 
 🔗 **Live Demo:** https://p2-diin.onrender.com
 
