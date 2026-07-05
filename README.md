@@ -6,7 +6,7 @@
 
 ## Overview
 
-P2 is a research data-collection web application designed to study how people write with and without AI assistance. Participants complete a guided, four-step flow: they enter their demographic information, write a short reflection using AI help, then write another reflection entirely by hand (no copy/paste allowed). All responses are stored for later analysis.
+AI-Assisted Writing Research Tool is a research data-collection web application designed to study how people write with and without AI assistance. Participants complete a guided, four-step flow: they enter their demographic information, write a short reflection using AI help, then write another reflection entirely by hand (no copy/paste allowed). All responses are stored for later analysis.
 
 The project is intended for academic or UX research comparing AI-assisted writing versus unassisted writing on environmental sustainability topics.
 
