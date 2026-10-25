@@ -4,7 +4,6 @@ import "./App.css";
 
 const API = import.meta.env.VITE_API_URL;
 
-// Timeout wrapper: rejects if fetch takes longer than `ms` milliseconds
 async function fetchWithTimeout(url: string, options: RequestInit, ms = 10000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -22,21 +21,24 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
+type TaskType = "ai" | "manual";
+
 interface UserInfo {
   userId: string;
   name?: string;
   age: number;
   gender: string;
   profession: string;
+  taskType?: TaskType;
 }
 
 interface SessionData {
   user?: UserInfo;
-  aiText?: string;
-  manualText?: string;
+  taskType?: TaskType;
 }
 
-const STEPS = ["Your Info", "AI Writing", "Manual Writing", "Done"];
+// 3 steps: Info → Writing Task → Done
+const STEPS = ["Your Info", "Writing Task", "Done"];
 
 function ProgressBar({ step }: { step: number }) {
   return (
@@ -62,8 +64,11 @@ function ProgressBar({ step }: { step: number }) {
 }
 
 function App() {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [session, setSession] = useState<SessionData>({});
+
+  // Randomly assign task type once on mount — fixed for the session
+  const taskType = useRef<TaskType>(Math.random() < 0.5 ? "ai" : "manual");
 
   useEffect(() => {
     try {
@@ -77,17 +82,16 @@ function App() {
     }
   }, []);
 
-  // Keep the server awake — ping every 5 minutes so it never cold-starts on a user
+  // Keep the server awake — ping every 5 minutes
   useEffect(() => {
     const ping = () => fetch(`${API}/api/ping`).catch(() => {});
-    ping(); // ping immediately on page load
+    ping();
     const interval = setInterval(ping, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const advance = () => setStep((s) => ((s + 1) as 1 | 2 | 3 | 4));
+  const advance = () => setStep((s) => ((s + 1) as 1 | 2 | 3));
 
-  // Returns true on success, false on failure
   const saveUser = async (info: UserInfo): Promise<boolean> => {
     try {
       const res = await fetchWithTimeout(
@@ -95,7 +99,7 @@ function App() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(info),
+          body: JSON.stringify({ ...info, taskType: taskType.current }),
         },
         10000
       );
@@ -132,10 +136,7 @@ function App() {
         return JSON.parse(raw).userId as string | undefined;
       } catch { return undefined; }
     })();
-    if (!userId) {
-      console.error("Missing userId for AI entry");
-      return false;
-    }
+    if (!userId) { console.error("Missing userId for AI entry"); return false; }
     try {
       const res = await fetchWithTimeout(
         `${API}/api/ai-text`,
@@ -147,7 +148,6 @@ function App() {
         10000
       );
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
-      setSession((prev) => ({ ...prev, aiText: text }));
       return true;
     } catch (err: unknown) {
       console.error("❌ AI text save failed:", err);
@@ -167,10 +167,7 @@ function App() {
         return JSON.parse(raw).userId as string | undefined;
       } catch { return undefined; }
     })();
-    if (!userId) {
-      console.error("Missing userId for manual entry");
-      return false;
-    }
+    if (!userId) { console.error("Missing userId for manual entry"); return false; }
     try {
       const res = await fetchWithTimeout(
         `${API}/api/manual-text`,
@@ -182,7 +179,6 @@ function App() {
         10000
       );
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
-      setSession((prev) => ({ ...prev, manualText: text }));
       return true;
     } catch (err: unknown) {
       console.error("❌ Manual text save failed:", err);
@@ -207,7 +203,7 @@ function App() {
             }}
           />
         )}
-        {step === 2 && (
+        {step === 2 && taskType.current === "ai" && (
           <AiPage
             onNext={async (prompt, text) => {
               const ok = await saveAi(prompt, text);
@@ -216,7 +212,7 @@ function App() {
             }}
           />
         )}
-        {step === 3 && (
+        {step === 2 && taskType.current === "manual" && (
           <ManualPage
             onSubmit={async (text) => {
               const ok = await saveManual(text);
@@ -225,7 +221,7 @@ function App() {
             }}
           />
         )}
-        {step === 4 && <ThankYouPage />}
+        {step === 3 && <ThankYouPage />}
       </div>
     </div>
   );
@@ -253,10 +249,7 @@ function UserInfoPage({ onNext }: { onNext: (info: UserInfo) => Promise<void> })
     if (!gender.trim()) newErrors.push("Gender is required");
     if (!profession.trim()) newErrors.push("Profession is required");
 
-    if (newErrors.length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (newErrors.length > 0) { setErrors(newErrors); return; }
 
     const info: UserInfo = {
       userId: id.trim(),
@@ -296,9 +289,7 @@ function UserInfoPage({ onNext }: { onNext: (info: UserInfo) => Promise<void> })
       )}
 
       {apiError && (
-        <div className="api-error-box">
-          ⚠️ {apiError}
-        </div>
+        <div className="api-error-box">⚠️ {apiError}</div>
       )}
 
       <div className="form-group">
@@ -351,7 +342,7 @@ function UserInfoPage({ onNext }: { onNext: (info: UserInfo) => Promise<void> })
 }
 
 /*
-  Page 2 – AI assisted writing. 10-minute timer.
+  AI-assisted writing page — 10-minute timer.
 */
 function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<void> }) {
   const [text, setText] = useState("");
@@ -405,7 +396,6 @@ function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<
     }
   };
 
-  // Auto-submit when timer expires — use ref to prevent double-firing
   useEffect(() => {
     if (timesUp && !hasAutoSubmitted.current) {
       hasAutoSubmitted.current = true;
@@ -431,8 +421,7 @@ function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<
 
       {apiError && (
         <div className="api-error-box">
-          ⚠️ {apiError}
-          {" "}
+          ⚠️ {apiError}{" "}
           <button
             type="button"
             className="btn btn-primary"
@@ -477,7 +466,7 @@ function AiPage({ onNext }: { onNext: (prompt: string, text: string) => Promise<
 }
 
 /*
-  Page 3 – manual writing. No copy/paste, 10-minute timer.
+  Manual writing page — no copy/paste, 10-minute timer.
 */
 function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> }) {
   const [text, setText] = useState("");
@@ -488,7 +477,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasAutoSubmitted = useRef(false);
   const isPasteRef = useRef(false);
- 
+
   useEffect(() => {
     const interval = setInterval(() => {
       setTimeLeft((t) => {
@@ -498,7 +487,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
     }, 1000);
     return () => clearInterval(interval);
   }, []);
- 
+
   const handleSubmit = async (currentText: string, isAuto = false) => {
     if (!isAuto && !currentText.trim()) {
       setApiError("Please write your response before finishing.");
@@ -520,8 +509,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
       setSaving(false);
     }
   };
- 
-  // Auto-submit when timer expires — use ref to prevent double-firing
+
   useEffect(() => {
     if (timesUp && !hasAutoSubmitted.current) {
       hasAutoSubmitted.current = true;
@@ -529,58 +517,56 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timesUp]);
- 
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!saving) handleSubmit(text);
   };
- 
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const handleBeforeInput = (e: InputEvent) => {
       if (e.inputType === "insertFromPaste" || e.inputType === "insertFromPasteAsQuotation") {
         e.preventDefault();
-        isPasteRef.current = false; // prevented at source, onChange won't fire
+        isPasteRef.current = false;
       }
     };
     textarea.addEventListener("beforeinput", handleBeforeInput);
     return () => textarea.removeEventListener("beforeinput", handleBeforeInput);
   }, []);
- 
+
   const block = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    isPasteRef.current = false; // clipboard blocked at event level, no onChange will fire
+    isPasteRef.current = false;
   };
- 
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "v") e.preventDefault();
   };
- 
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    // If this change was triggered by a paste event, block it
     if (isPasteRef.current) {
       isPasteRef.current = false;
       return;
     }
     setText(e.target.value);
   };
- 
+
   return (
     <form onSubmit={submit} className="form-container writing-form">
       <h2 className="form-title">Write without using AI</h2>
       <p className="form-subtext">
-        <b>Scenario:</b>&nbsp;When people make everyday choices, such as using public transportation, conserving electricity, or reducing waste, these actions may seem small individually but can have larger collective impacts over time.
+        <b>Scenario:</b>&nbsp;You notice many electronic devices in your home (lights, chargers, appliances) are often left on even when not in use. Some people believe small daily habits like turning off unused devices can reduce energy consumption and help the environment over time.
       </p>
       <p className="form-subtext">
-        <b>Reflection Question:</b>&nbsp;To what extent do you think small individual actions can contribute to solving larger global issues?
+        <b>Reflection Question:</b>&nbsp;What are your thoughts on how individual daily habits can influence overall energy consumption and environmental sustainability?
       </p>
       <p className="warning-text">⚠️ No AI assistance. Copy/paste is disabled.</p>
- 
+
       {apiError && (
         <div className="api-error-box">
-          ⚠️ {apiError}
-          {" "}
+          ⚠️ {apiError}{" "}
           <button
             type="button"
             className="btn btn-primary"
@@ -592,7 +578,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
           </button>
         </div>
       )}
- 
+
       <textarea
         ref={textareaRef}
         rows={10}
@@ -618,7 +604,7 @@ function ManualPage({ onSubmit }: { onSubmit: (text: string) => Promise<void> })
 }
 
 /*
-  Page 4 – thank you message.
+  Page 3 – thank you message.
 */
 function ThankYouPage() {
   return (
