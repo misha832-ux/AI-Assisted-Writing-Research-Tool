@@ -21,6 +21,7 @@ model User {
   age          Int
   gender       String
   profession   String
+  taskType     String?   // "ai" or "manual" — randomly assigned on page 2
   createdAt    DateTime @default(now())
 
   aiEntries     AiEntry[]

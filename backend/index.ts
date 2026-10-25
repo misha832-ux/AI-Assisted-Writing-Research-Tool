@@ -73,7 +73,7 @@ app.get("/api/ping", (_req: Request, res: Response) => {
 // POST /api/user
 app.post("/api/user", async (req: Request, res: Response) => {
   try {
-    const { userId, name, age, gender, profession } = req.body;
+    const { userId, name, age, gender, profession, taskType } = req.body;
 
     if (!userId || typeof userId !== "string" || !userId.trim()) {
       return res.status(400).json({ error: "userId is required" });
@@ -92,6 +92,7 @@ app.post("/api/user", async (req: Request, res: Response) => {
       age: Number(age),
       gender: String(gender).trim(),
       profession: String(profession).trim(),
+      ...(typeof taskType === "string" && (taskType === "ai" || taskType === "manual") ? { taskType } : {}),
       ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}),
     };
 
