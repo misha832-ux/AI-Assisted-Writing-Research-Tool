@@ -6,20 +6,23 @@
 
 ## Overview
 
-AI-Assisted Writing Research Tool is a research data-collection web application designed to study how people write with and without AI assistance. Participants complete a guided, four-step flow: they enter their demographic information, write a short reflection using AI help, then write another reflection entirely by hand (no copy/paste allowed). All responses are stored for later analysis.
+AI-Assisted Writing Research Tool is a research data-collection web application designed to study how people write with and without AI assistance. Each participant is **randomly assigned** to one of two conditions — AI-assisted writing or manual writing — so they complete only one writing task. All responses are stored for later analysis comparing the two groups.
 
-The project is intended for academic or UX research comparing AI-assisted writing versus unassisted writing on environmental sustainability topics.
+The project is intended for academic research on AI-assisted writing versus unassisted writing on environmental sustainability topics.
 
 ---
 
 ## Application Flow
 
-The app walks participants through four steps, shown via a progress bar:
+The app walks participants through three steps, shown via a progress bar:
 
 1. **Your Info** — Collects user ID, name (optional), age, gender, and profession.
-2. **AI Writing** — Participant writes a reflection on energy habits *with* AI assistance. A 10-minute countdown timer auto-submits when it expires. The participant also logs the AI prompt they used.
-3. **Manual Writing** — Participant writes a reflection on individual vs. global impact *without* AI. Copy/paste is fully disabled. 10-minute timer auto-submits.
-4. **Done** — Thank you screen confirming submission.
+2. **Writing Task** — Randomly assigned to one of two conditions:
+   - **AI Writing** — Participant writes a reflection on energy habits *with* AI assistance. They also log the AI prompt they used. 10-minute countdown timer auto-submits when it expires.
+   - **Manual Writing** — Participant writes a reflection on individual vs. global impact *without* AI. Copy/paste is fully disabled. 10-minute timer auto-submits.
+3. **Done** — Thank you screen confirming submission.
+
+The task type assigned (`ai` or `manual`) is saved to the user record in the database, so participants can be grouped correctly during analysis.
 
 ---
 
@@ -35,7 +38,7 @@ The app walks participants through four steps, shown via a progress bar:
 cd backend
 npm install
 # Create a .env file with:
-# DATABASE_URL=mongodb+srv://<user>:<password>@<cluster>/p2
+# DATABASE_URL=mongodb+srv://<user>:<password>@<cluster>/w-task
 npm run prisma:generate
 npm run prisma:db:push
 npm run dev
@@ -55,6 +58,7 @@ npm run dev
 
 ## Key Implementation Details
 
+- **Random task assignment:** `useState` with a lazy initializer assigns each participant to `"ai"` or `"manual"` at mount, with equal probability. The assignment is sent to the backend along with user info and stored in the `taskType` field on the `User` model.
 - **Rate limiting:** max 30 requests per IP per minute on all `/api/` routes.
 - **Request timeout:** server responds with `503` if a handler takes longer than 9 seconds; frontend aborts at 10 seconds.
 - **Paste prevention:** the manual writing step blocks `paste`, `copy`, `cut`, context menus, and Ctrl+V at multiple levels (`onPaste`, `beforeinput` event, `onKeyDown`).
