@@ -67,8 +67,13 @@ function App() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [session, setSession] = useState<SessionData>({});
 
-  // Randomly assign task type once — useState initializer runs exactly once
-  const [taskType] = useState<TaskType>(() => Math.random() < 0.5 ? "ai" : "manual");
+  // Read task type from URL: ?task=ai or ?task=manual
+  // Falls back to random if param is missing or invalid
+  const [taskType] = useState<TaskType>(() => {
+    const param = new URLSearchParams(window.location.search).get("task");
+    if (param === "ai" || param === "manual") return param;
+    return Math.random() < 0.5 ? "ai" : "manual";
+  });
 
   useEffect(() => {
     try {
